@@ -5,11 +5,13 @@ import pandas as pd
 import numpy as np 
 import matplotlib as mpl 
 import matplotlib.pyplot as plt 
+import matplotlib.ticker as plticker
 from mpl_toolkits.mplot3d import Axes3D
 from scipy.interpolate import splrep, splev
 from scipy.signal import medfilt
 from colour_thresh_helpers import *
 from get_key_press import *
+from valley_find import *
 # check opencv version
 print(cv2.__version__)
 
@@ -18,9 +20,12 @@ print(cv2.__version__)
 # you can get the RGB values by using video/image editor
 # ex: I saved a moment from the video using movies&TV and then open the saved image in paint 3D to get the RGB values of the TRACKER pasted on the hand
 # note that opencv reads BGR not RGB
-blue=56
-green= 94
-red=73
+# blue=56
+# green= 94
+# red=73
+blue=28
+green=93
+red=37
 colour=np.uint8([[[blue,green,red]]])
 
 # convert colour to HSV values to create mask
@@ -44,11 +49,14 @@ upper_range = np.array([upper, 255, 255], dtype=np.uint8)
 
 # Read video
 # Copy the video path with the forwardslash
-my_video_file="C:/Users/Piyumi/Videos/New Data/1478-M.mp4"
+# "C:\Users\Piyumi\Videos\Video files latest\9675_HG.mp4"
+# "C:\Users\Piyumi\Videos\Video files latest\Piyumi\0176.mp4"
+# "C:\Users\Piyumi\Videos\New Data\0163-M.mp4"
+my_video_file="C:/Users/Piyumi/Videos/New Data/1369-M.mp4"
 video=cv2.VideoCapture(my_video_file)
-v_name="1478_M"
+v_name="1369_M"
 file_name=v_name +".csv"
-file_name2= v_name + " With Gradient "
+file_name2= v_name + " With Gradient.csv "
 figure_name= v_name+".png"
 figure_name3d= v_name+"3d.png"
 
@@ -137,6 +145,7 @@ while True:
 video.release()
 cv2.destroyAllWindows()
 
+# -------------------------------------------------------------
 
 print("diagrams goes here")
 # make arrays for x,y,z to plot graphs
@@ -152,17 +161,19 @@ gradiet_vals=cal_gradient(X,Y)
 
 # append gradient to the xyz dataframe and save another csv
 df["Gradient"]=gradiet_vals
-# print(df)
+print('df')
+
+print(df)
 df.to_csv(file_name2,index=False)
 
 # get the actual key presses using colour thresholding for the LED
 # get_press function returs a pandas df containing frame on of where actual key press happens
 press_df,press_array=get_press(my_video_file)
-result_df=df.merge(press_df, left_on="Frame No",right_on="Key_Press")
-result_df.to_csv(v_name+"with actual key press.csv",index=False)
+result_df=df.merge(press_df, left_on="Frame_No",right_on="Key_Press")
+result_df.to_csv(v_name+"actual key press.csv",index=False)
 
-
-frm=np.asarray(result_df[["Frame No"]])
+# result_df contains actual key presses
+frm=np.asarray(result_df[["Frame_No"]])
 grd=np.asarray(result_df[["Gradient"]])
 x2=np.asarray(result_df[["X"]])
 y2=np.asarray(result_df[["Y"]])
@@ -185,40 +196,116 @@ ax.set_xlabel('$X$')
 ax.set_ylabel('$Y$')
 ax.set_zlabel('$frame no $',rotation = 0)
 ax.zaxis.set_ticks(np.arange(min(Z),max(Z)+(max(Z)-min(Z))/number_of_ticks, ((max(Z)-min(Z))/number_of_ticks )))
+
 plt.show()
 fig.savefig(figure_name3d)
 plt.show()
 
 
-# draw gradient graph
-Z_new=np.linspace(Z.min(),Z.max(),500)
+#smoothen gradient
+Z_new=np.linspace(Z.min(),Z.max(),500,endpoint=True)
 bspl = splrep(Z,gradiet_vals,s=5)
 bspl_y = splev(Z_new,bspl)
-
-
 smooth_df=pd.DataFrame({'Z':Z_new,'data':bspl_y})
-
 smooth_df.to_csv("smoothen_y.csv",index=False)
 
-# smooth_df['min'] = smooth_df.Y_Smooth[(smooth_df.Y_Smooth.shift(1) > smooth_df.Y_Smooth) & (smooth_df.Y_Smooth.shift(-1) > smooth_df.Y_Smooth)]
-# plt.scatter(smooth_df.index, df['min'], c='r')
-# smooth_df.Y_Smooth.plot()
 
-# filt_grad=medfilt(gradiet_vals,)
 
-# fig=plt.figure()
-fig,ax=plt.subplots(2,1)
-ax[0].plot(X,Y)
-ax[0].scatter(x2,y2,c="#FF5733")
 
-ax[1].set_ylim(-1,30)
 
-ax[1].plot(Z,gradiet_vals)
-ax[1].plot(Z_new,bspl_y,c="#FFFF00")
-ax[1].scatter(frm,grd,c="#FF6133")
+
+
+# x,y with actual key press
+# fig,ax=plt.subplots(2,1)
+# ax[0].plot(X,Y,label="X,Y Data Points")
+# ax[0].scatter(x2,y2,label="Actual Keypress",c="#FF5733")
+# ax[0].title.set_text('X,Y with Actual key presses')
+# ax[0].legend()
+# # gradient graph with actual key press
+# ax[1].set_ylim(-1,30)
+# ax[1].plot(Z,gradiet_vals)
+# ax[1].plot(Z_new,bspl_y,c="#FFFF00")
+# ax[1].scatter(frm,grd,c="#FF6133")
+# ax[1].title.set_text('Gradient and Actual key press')
+
+fig=plt.figure()
+ax =fig.add_subplot()
+ax.plot(X,Y,label="X,Y Data Points")
+ax.scatter(x2,y2,label="Actual Keypress",c="#FF5733")
+ax.title.set_text('X,Y with Actual key presses')
+ax.legend()
+plt.show()
+
+fig = plt.figure()
+ax1 = fig.add_subplot()
+ax1.set_ylim(-1,30)
+ax1.plot(Z,gradiet_vals,label="Gradient Valus")
+ax1.set_xlabel('Frame No')
+ax1.set_ylabel('Gradient Value')
+# ax.plot(Z_new,bspl_y,c="#FFFF00")
+# ax.scatter(frm,grd,c="#FF6133")
+ax1.title.set_text('Gradient Graph')
+plt.show()
+
 
 fig.savefig(figure_name)
+
+# plt.plot(X,Y,label='X,Y with Actual key presses')
+# plt.scatter(x2,y2,c="#FF5733")
+# plt.show()
+
+
+data='Gradient'
+dfx=find_local_valleys(df,data)
+print('dfx')
+dfx.to_csv('local_peaks_of_gradient.csv',index=False)
+
+fig = plt.figure()
+ax1 = fig.add_subplot()
+ax1.plot(dfx.Frame_No,dfx.Gradient, label="Gradient")
+ax1.scatter(dfx['Frame_No'],dfx['min'], c='r',label="Valleys")
+ax1.set_ylabel('Gradient')
+ax1.set_xlabel('Frame No')
+ax1.set_title('Valleys in Gradient')
+ax1.set_ylim(-1,12)
+ax1.set_xlim(60,180)
+ax1.legend()
 plt.show()
+
+# fig,ax=plt.subplots(2,1)
+# intervals = 30
+# loc = plticker.MultipleLocator(base=intervals)
+# loc1 = plticker.MultipleLocator(base=15)
+# ax[0].xaxis.set_minor_locator(loc)
+# ax[0].xaxis.set_major_locator(loc1)
+# ax[0].grid(which='minor', axis='x', linestyle='-')
+# ax[0].grid(which='major', axis='x', linestyle='-',color='g')
+# ax[0].scatter(dfx['Frame_No'],dfx['min'], c='r')
+# ax[0].plot(dfx.Frame_No,dfx.Gradient)
+# ax[0].set_ylim(-5,12)
+# ax[0].title.set_text('Valleys')
+
+
+
+
+# data='data'
+# dfy=find_local_valleys(smooth_df,data)
+# dfy.to_csv('local_peaks_of_smoothn_gradient.csv',index=False)
+
+# intervals = 30
+# loc2 = plticker.MultipleLocator(base=intervals)
+# loc3 = plticker.MultipleLocator(base=15)
+# ax[1].xaxis.set_minor_locator(loc2)
+# ax[1].xaxis.set_major_locator(loc3)
+# ax[1].grid(which='minor', axis='x', linestyle='-')
+# ax[1].grid(which='major', axis='x', linestyle='-',color='g')
+# ax[1].scatter(dfy['Z'],dfy['min'], c='r')
+# ax[1].plot(dfy.Z,dfy.data)
+# ax[1].title.set_text('key press with smoothing')
+
+# ax[1].set_ylim(-5,10)
+# # plt.xlim(25,150)
+# plt.show()
 
  
 
